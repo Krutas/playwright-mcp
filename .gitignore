@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.png
+extension_screenshot.png
+screenshot.png
+write-src.cjs
+write-ext.cjs
