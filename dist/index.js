@@ -1,0 +1,233 @@
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import { chromium } from "playwright";
+import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
+let browser = null;
+let context = null;
+let page = null;
+function toJsonSchema(schema) {
+    return zodToJsonSchema(schema);
+}
+const NavigateArgs = z.object({ url: z.string().describe("URL to navigate to") });
+const ScreenshotArgs = z.object({ path: z.string().optional().describe("File path"), fullPage: z.boolean().optional() });
+const ClickArgs = z.object({ selector: z.string().describe("CSS selector") });
+const TypeArgs = z.object({ selector: z.string(), text: z.string(), delay: z.number().optional() });
+const EvaluateArgs = z.object({ script: z.string() });
+const GetTextArgs = z.object({ selector: z.string() });
+const GetAttributeArgs = z.object({ selector: z.string(), name: z.string() });
+const SelectArgs = z.object({ selector: z.string(), value: z.string() });
+const HoverArgs = z.object({ selector: z.string() });
+const WaitForSelectorArgs = z.object({ selector: z.string(), timeout: z.number().optional(), state: z.enum(["attached", "detached", "visible", "hidden"]).optional() });
+const PressKeyArgs = z.object({ key: z.string() });
+const GetUrlArgs = z.object({});
+const GetTitleArgs = z.object({});
+const GoBackArgs = z.object({});
+const GoForwardArgs = z.object({});
+const ReloadArgs = z.object({});
+const SetViewportArgs = z.object({ width: z.number(), height: z.number() });
+const ScrollArgs = z.object({ x: z.number().optional(), y: z.number().optional() });
+const GetHtmlArgs = z.object({ selector: z.string().optional() });
+const FillArgs = z.object({ selector: z.string(), value: z.string() });
+const CheckArgs = z.object({ selector: z.string() });
+const UncheckArgs = z.object({ selector: z.string() });
+const NewPageArgs = z.object({});
+const ClosePageArgs = z.object({});
+const ListPagesArgs = z.object({});
+async function ensureBrowser() {
+    if (!browser || !context || !page) {
+        browser = await chromium.launch({ headless: true });
+        context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+        page = await context.newPage();
+    }
+    return { browser, context, page };
+}
+function textContent(text) {
+    return { content: [{ type: "text", text }] };
+}
+async function handleToolCall(name, args) {
+    const { page: p } = await ensureBrowser();
+    switch (name) {
+        case "browser_navigate": {
+            const { url } = NavigateArgs.parse(args);
+            await p.goto(url, { waitUntil: "networkidle" });
+            return textContent("Navigated to " + url);
+        }
+        case "browser_screenshot": {
+            const { path: filePath = "screenshot.png", fullPage = false } = ScreenshotArgs.parse(args);
+            await p.screenshot({ path: filePath, fullPage });
+            return textContent("Screenshot saved to " + filePath);
+        }
+        case "browser_click": {
+            const { selector } = ClickArgs.parse(args);
+            await p.click(selector);
+            return textContent("Clicked: " + selector);
+        }
+        case "browser_type": {
+            const { selector, text, delay } = TypeArgs.parse(args);
+            await p.fill(selector, "");
+            await p.type(selector, text, { delay });
+            return textContent("Typed into " + selector);
+        }
+        case "browser_evaluate": {
+            const { script } = EvaluateArgs.parse(args);
+            const result = await p.evaluate(script);
+            return textContent(JSON.stringify(result, null, 2));
+        }
+        case "browser_get_text": {
+            const { selector } = GetTextArgs.parse(args);
+            const text = await p.textContent(selector);
+            return textContent(text || "");
+        }
+        case "browser_get_attribute": {
+            const { selector, name } = GetAttributeArgs.parse(args);
+            const value = await p.getAttribute(selector, name);
+            return textContent(value || "");
+        }
+        case "browser_select": {
+            const { selector, value } = SelectArgs.parse(args);
+            await p.selectOption(selector, value);
+            return textContent("Selected " + value);
+        }
+        case "browser_hover": {
+            const { selector } = HoverArgs.parse(args);
+            await p.hover(selector);
+            return textContent("Hovered: " + selector);
+        }
+        case "browser_wait_for_selector": {
+            const { selector, timeout = 30000, state } = WaitForSelectorArgs.parse(args);
+            await p.waitForSelector(selector, { timeout, state });
+            return textContent("Selector visible: " + selector);
+        }
+        case "browser_press_key": {
+            const { key } = PressKeyArgs.parse(args);
+            await p.keyboard.press(key);
+            return textContent("Pressed: " + key);
+        }
+        case "browser_get_url": {
+            return textContent(p.url());
+        }
+        case "browser_get_title": {
+            const title = await p.title();
+            return textContent(title);
+        }
+        case "browser_go_back": {
+            await p.goBack({ waitUntil: "networkidle" });
+            return textContent("Navigated back");
+        }
+        case "browser_go_forward": {
+            await p.goForward({ waitUntil: "networkidle" });
+            return textContent("Navigated forward");
+        }
+        case "browser_reload": {
+            await p.reload({ waitUntil: "networkidle" });
+            return textContent("Page reloaded");
+        }
+        case "browser_set_viewport": {
+            const { width, height } = SetViewportArgs.parse(args);
+            await p.setViewportSize({ width, height });
+            return textContent("Viewport: " + width + "x" + height);
+        }
+        case "browser_scroll": {
+            const { x = 0, y = 0 } = ScrollArgs.parse(args);
+            await p.evaluate("window.scrollTo(" + x + "," + y + ")");
+            return textContent("Scrolled to " + x + "," + y);
+        }
+        case "browser_get_html": {
+            const { selector } = GetHtmlArgs.parse(args);
+            if (selector) {
+                const el = await p.$(selector);
+                const html = el ? await el.innerHTML() : "";
+                return textContent(html);
+            }
+            const html = await p.content();
+            return textContent(html);
+        }
+        case "browser_fill": {
+            const { selector, value } = FillArgs.parse(args);
+            await p.fill(selector, value);
+            return textContent("Filled " + selector);
+        }
+        case "browser_check": {
+            const { selector } = CheckArgs.parse(args);
+            await p.check(selector);
+            return textContent("Checked " + selector);
+        }
+        case "browser_uncheck": {
+            const { selector } = UncheckArgs.parse(args);
+            await p.uncheck(selector);
+            return textContent("Unchecked " + selector);
+        }
+        case "browser_new_page": {
+            const newPage = await context.newPage();
+            page = newPage;
+            return textContent("New page created");
+        }
+        case "browser_close_page": {
+            await p.close();
+            const pages = context.pages();
+            page = pages.length > 0 ? pages[pages.length - 1] : null;
+            return textContent("Page closed");
+        }
+        case "browser_list_pages": {
+            const pages = context.pages();
+            const urls = pages.map((pg, i) => "[" + i + "] " + pg.url());
+            return textContent(urls.join("\n") || "No pages");
+        }
+        default:
+            throw new Error("Unknown tool: " + name);
+    }
+}
+const toolDefinitions = [
+    { name: "browser_navigate", description: "Navigate to a URL", inputSchema: toJsonSchema(NavigateArgs) },
+    { name: "browser_screenshot", description: "Take a screenshot", inputSchema: toJsonSchema(ScreenshotArgs) },
+    { name: "browser_click", description: "Click an element", inputSchema: toJsonSchema(ClickArgs) },
+    { name: "browser_type", description: "Type text into an input", inputSchema: toJsonSchema(TypeArgs) },
+    { name: "browser_evaluate", description: "Execute JavaScript", inputSchema: toJsonSchema(EvaluateArgs) },
+    { name: "browser_get_text", description: "Get element text", inputSchema: toJsonSchema(GetTextArgs) },
+    { name: "browser_get_attribute", description: "Get element attribute", inputSchema: toJsonSchema(GetAttributeArgs) },
+    { name: "browser_select", description: "Select option", inputSchema: toJsonSchema(SelectArgs) },
+    { name: "browser_hover", description: "Hover over element", inputSchema: toJsonSchema(HoverArgs) },
+    { name: "browser_wait_for_selector", description: "Wait for element", inputSchema: toJsonSchema(WaitForSelectorArgs) },
+    { name: "browser_press_key", description: "Press a key", inputSchema: toJsonSchema(PressKeyArgs) },
+    { name: "browser_get_url", description: "Get current URL", inputSchema: toJsonSchema(GetUrlArgs) },
+    { name: "browser_get_title", description: "Get page title", inputSchema: toJsonSchema(GetTitleArgs) },
+    { name: "browser_go_back", description: "Go back", inputSchema: toJsonSchema(GoBackArgs) },
+    { name: "browser_go_forward", description: "Go forward", inputSchema: toJsonSchema(GoForwardArgs) },
+    { name: "browser_reload", description: "Reload page", inputSchema: toJsonSchema(ReloadArgs) },
+    { name: "browser_set_viewport", description: "Set viewport size", inputSchema: toJsonSchema(SetViewportArgs) },
+    { name: "browser_scroll", description: "Scroll page", inputSchema: toJsonSchema(ScrollArgs) },
+    { name: "browser_get_html", description: "Get page HTML", inputSchema: toJsonSchema(GetHtmlArgs) },
+    { name: "browser_fill", description: "Fill input field", inputSchema: toJsonSchema(FillArgs) },
+    { name: "browser_check", description: "Check checkbox", inputSchema: toJsonSchema(CheckArgs) },
+    { name: "browser_uncheck", description: "Uncheck checkbox", inputSchema: toJsonSchema(UncheckArgs) },
+    { name: "browser_new_page", description: "Create new tab", inputSchema: toJsonSchema(NewPageArgs) },
+    { name: "browser_close_page", description: "Close current page", inputSchema: toJsonSchema(ClosePageArgs) },
+    { name: "browser_list_pages", description: "List open pages", inputSchema: toJsonSchema(ListPagesArgs) },
+];
+const server = new Server({ name: "playwright-mcp-server", version: "1.0.0" }, { capabilities: { tools: {} } });
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: toolDefinitions }));
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    try {
+        return await handleToolCall(request.params.name, request.params.arguments ?? {});
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { content: [{ type: "text", text: "Error: " + message }], isError: true };
+    }
+});
+async function main() {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Playwright MCP server running on stdio");
+}
+main().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+});
+process.on("SIGINT", async () => { if (browser)
+    await browser.close(); process.exit(0); });
+process.on("SIGTERM", async () => { if (browser)
+    await browser.close(); process.exit(0); });
+//# sourceMappingURL=index.js.map
