@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 340px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 16px;
+    }
+    h1 { font-size: 16px; color: #00d4aa; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    h1 .ff-badge {
+      font-size: 9px;
+      background: #ff6611;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: #16213e;
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .dot.connected { background: #00d4aa; box-shadow: 0 0 6px #00d4aa; }
+    .dot.disconnected { background: #e94560; }
+    .tab-info {
+      padding: 8px 12px;
+      background: #16213e;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      font-size: 12px;
+      word-break: break-all;
+    }
+    .tab-info .label { color: #888; font-size: 11px; }
+    .tab-info .value { color: #e0e0e0; margin-top: 2px; max-height: 40px; overflow: hidden; }
+    button {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 8px;
+    }
+    button.connect { background: #00d4aa; color: #1a1a2e; }
+    button.connect:hover { background: #00b894; }
+    button.disconnect { background: #e94560; color: white; }
+    button.disconnect:hover { background: #c0392b; }
+    button.secondary { background: #0f3460; color: #e0e0e0; }
+    button.secondary:hover { background: #1a4a7a; }
+    input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #0f3460;
+      border-radius: 6px;
+      background: #16213e;
+      color: #e0e0e0;
+      font-size: 12px;
+      margin-bottom: 8px;
+      outline: none;
+    }
+    input:focus { border-color: #00d4aa; }
+    .footer { font-size: 11px; color: #555; text-align: center; margin-top: 8px; }
+    .features {
+      font-size: 11px;
+      color: #888;
+      padding: 6px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .features span {
+      background: #0f3460;
+      padding: 2px 6px;
+      border-radius: 3px;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+  <h1>
+    🔗 Playwright MCP Bridge
+    <span class="ff-badge">Firefox</span>
+  </h1>
+  <div class="status" id="status">
+    <span class="dot disconnected" id="dot"></span>
+    <span id="statusText">Disconnected</span>
+  </div>
+  <div class="tab-info" id="tabInfo" style="display:none">
+    <div class="label">Attached Tab</div>
+    <div class="value" id="tabUrl"></div>
+  </div>
+  <input type="text" id="wsUrl" value="ws://localhost:9223" placeholder="WebSocket URL">
+  <button class="connect" id="connectBtn">🔌 Connect</button>
+  <button class="secondary" id="attachBtn">📌 Attach to Active Tab</button>
+  <button class="disconnect" id="disconnectBtn" style="display:none">⛔ Disconnect</button>
+  <div class="features">
+    <span>🌐 Navigate</span>
+    <span>📸 Screenshot</span>
+    <span>🖱️ Click</span>
+    <span>⌨️ Type</span>
+    <span>📄 Get Text</span>
+    <span>🔍 Evaluate JS</span>
+  </div>
+  <div class="footer">v1.0.0 — Firefox Edition — Links browser tab to MCP agent</div>
+  <script src="popup.js"></script>
+</body>
+</html>
